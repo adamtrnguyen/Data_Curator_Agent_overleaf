@@ -12,49 +12,74 @@
 
 \begin{document}
 
-\begin{frame}
-  \titlepage
-\end{frame}
-
 %% ============================================================
-%% CONTEXT: What's the problem and where we left off
+%% CONTEXT: Where we left off
 %% ============================================================
 
-\aeframe{Coding agents waste 8--10 turns on environment discovery before producing data insights}{
-  % Recap slide — use a figure or table from last meeting if helpful
-  \begin{itemize}
-    \item Last meeting: baseline runs with Claude (Opus 4.6) and Codex (gpt-5.3)
-    \item Both completed the task but invented quality formulas with no empirical grounding
-    \item Neither performed web research despite having access
-  \end{itemize}
-  % TODO: replace bullets with a visual (e.g., the comparison table from 2026-02-24)
+\aeframe{Last week: agent pipeline blocked by slow training, missing eval judge, and verbose tool descriptions}{
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item Training: 1-hour hardcoded timeout, batch size untested on H200
+        \item Eval: MMVet and MathVista required GPT-4o as judge (\texttt{OPENAI\_API\_KEY})
+        \item Tools: 13 tool docstrings with verbose descriptions causing context bloat
+        \item Result: agent could not complete a full profile $\to$ train $\to$ eval episode
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      % TODO: replace with agent architecture figure
+      \fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}\textit{Agent Architecture Figure}\vspace{3cm}}}
+    \end{column}
+  \end{columns}
 }
 
 %% ============================================================
-%% THIS WEEK'S WORK
+%% THIS WEEK: Pipeline fixes
 %% ============================================================
 
-% \aeframe{Sentence assertion stating what you found}{
-%   % Figure, table, or diagram as evidence
-%   \centering
-%   % \includegraphics[width=0.8\linewidth]{figures/your_figure}
-% }
+\aeframe{Local Qwen3.5-27B judge matches GPT-4o within 1 point on all 6 benchmarks}{
+  \centering
+  \small
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Benchmark} & \textbf{Published} & \textbf{Ours (Qwen3.5 judge)} \\
+    \midrule
+    MMStar & 30.4 & 30.4 \\
+    OCRBench & 317 & 317 \\
+    HallusionBench & 27.6 & 27.6 \\
+    MMMU\_DEV\_VAL & 35.3 & 35.3 \\
+    MMVet & 31.1 & 30.2 \\
+    MathVista\_MINI & 26.1 & 25.4 \\
+    \bottomrule
+  \end{tabular}
 
-%% ============================================================
-%% KEY FINDINGS
-%% ============================================================
+  \vspace{0.5em}
+  Judge-dependent benchmarks (MMVet, MathVista) differ by $<$1 point. \\
+  Eliminates OpenAI dependency --- fully local eval pipeline.
+}
 
-% \findingframe{One-sentence finding goes here}{
-%   Supporting evidence or brief explanation
-% }
+\aeframe{Training fixed to 10-min episodes: batch=2, 200 steps, configurable from YAML}{
+  \begin{itemize}
+    \item \textbf{OOM fix}: \texttt{batch\_size=16} crashed on 2$\times$H200; fixed to \texttt{batch=2, grad\_accum=2}
+    \item \textbf{Timing}: $\sim$2.8s/step $\times$ 200 steps = $\sim$9.3 min training
+    \item \textbf{Configurable}: \texttt{max\_steps\_cap} and \texttt{timeout} now in task YAML
+    \item \textbf{Tool docstrings}: rewrote all 13 to ``what + when'' only (per smelly tool descriptions paper)
+  \end{itemize}
+
+  \vspace{0.5em}
+  \centering
+  Target episode budget: $<$1 min data ops + 10 min train + 5 min eval $\approx$ \textbf{16 min/episode}
+}
 
 %% ============================================================
 %% NEXT STEPS
 %% ============================================================
 
 \taskframe{
-  \item Task 1
-  \item Task 2
+  \item Validate full episode loop completes end-to-end (currently running)
+  \item Test multi-episode: does the agent improve curation from eval feedback?
+  \item Explore splitting agent into phase-specific sub-agents (profiler, filterer, mixer) to reduce context window pressure
 }
 
 \end{document}
