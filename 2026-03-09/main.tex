@@ -29,18 +29,18 @@ Now uses locally-served Qwen3.5-27B-FP8 via vLLM at \texttt{ARC\_API\_BASE}.
 \begin{table}[H]
 \centering
 \small
-\caption{Sanity check: LLaVA-1.5-7B zero-shot scores. Local judge within $\sim$1 point of published baselines.}
+\caption{Sanity check: LLaVA-1.5-7B zero-shot scores. Baseline column is a mix of paper-reported and VLMEvalKit-reproduced values; see Note column. Local Qwen3.5 judge within $\sim$1 point of baselines.}
 \label{tab:judge-sanity}
-\begin{tabular}{lccl}
+\begin{tabular}{lccll}
 \toprule
-\textbf{Benchmark} & \textbf{Published} & \textbf{Ours (Qwen3.5 judge)} & \textbf{Source} \\
+\textbf{Benchmark} & \textbf{Baseline} & \textbf{Ours (Qwen3.5 judge)} & \textbf{Source} & \textbf{Note} \\
 \midrule
-MMStar & 30.4 & 30.4 & \cite{chen2024mmstar} \\
-OCRBench & 317 & 317 & \cite{liu2023ocrbench} \\
-HallusionBench & 27.6 & 27.6 & \cite{guan2024hallusionbench} \\
-MMMU\_DEV\_VAL & 35.3 & 35.3 & \cite{yue2024mmmu} \\
-MMVet & 31.1 & 30.2 & \cite{yu2024mmvet} \\
-MathVista\_MINI & 26.1 & 25.4 & \cite{lu2024mathvista} \\
+MMStar & 30.3 & 30.4 & \cite{chen2024mmstar} & from paper \\
+OCRBench & 317 & 317 & \cite{liu2023ocrbench} & VLMEvalKit run (paper: 297) \\
+HallusionBench & 27.6 & 27.6 & \cite{guan2024hallusionbench} & VLMEvalKit composite \\
+MMMU\_DEV\_VAL & 35.3 & 35.3 & \cite{yue2024mmmu} & lmms-eval (val split) \\
+MMVet & 31.1 & 30.2 & \cite{yu2024mmvet} & from paper \\
+MathVista\_MINI & 26.1 & 25.4 & \cite{lu2024mathvista} & VLMEvalKit run \\
 \bottomrule
 \end{tabular}
 \end{table}

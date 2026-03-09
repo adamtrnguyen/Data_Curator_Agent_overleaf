@@ -43,16 +43,16 @@
 \aeframe{Local Qwen3.5-27B judge matches GPT-4o within 1 point on all 6 benchmarks}{
   \centering
   \small
-  \begin{tabular}{lccl}
+  \begin{tabular}{lccll}
     \toprule
-    \textbf{Benchmark} & \textbf{Published} & \textbf{Ours (Qwen3.5 judge)} & \textbf{Source} \\
+    \textbf{Benchmark} & \textbf{Baseline} & \textbf{Ours (Qwen3.5 judge)} & \textbf{Source} & \textbf{Note} \\
     \midrule
-    MMStar & 30.4 & 30.4 & \srclink{https://arxiv.org/abs/2403.20330}{Chen+ '24} \\
-    OCRBench & 317 & 317 & \srclink{https://arxiv.org/abs/2305.07895}{Liu+ '23} \\
-    HallusionBench & 27.6 & 27.6 & \srclink{https://arxiv.org/abs/2310.14566}{Guan+ '24} \\
-    MMMU\_DEV\_VAL & 35.3 & 35.3 & \srclink{https://arxiv.org/abs/2311.16502}{Yue+ '24} \\
-    MMVet & 31.1 & 30.2 & \srclink{https://arxiv.org/abs/2308.02490}{Yu+ '24} \\
-    MathVista\_MINI & 26.1 & 25.4 & \srclink{https://arxiv.org/abs/2310.02255}{Lu+ '24} \\
+    MMStar & 30.3 & 30.4 & \srclink{https://arxiv.org/abs/2403.20330}{Chen+ '24} & from paper \\
+    OCRBench & 317 & 317 & \srclink{https://arxiv.org/abs/2305.07895}{Liu+ '23} & VLMEvalKit run (paper: 297) \\
+    HallusionBench & 27.6 & 27.6 & \srclink{https://arxiv.org/abs/2310.14566}{Guan+ '24} & VLMEvalKit composite \\
+    MMMU\_DEV\_VAL & 35.3 & 35.3 & \srclink{https://arxiv.org/abs/2311.16502}{Yue+ '24} & lmms-eval (val split) \\
+    MMVet & 31.1 & 30.2 & \srclink{https://arxiv.org/abs/2308.02490}{Yu+ '24} & from paper \\
+    MathVista\_MINI & 26.1 & 25.4 & \srclink{https://arxiv.org/abs/2310.02255}{Lu+ '24} & VLMEvalKit run \\
     \bottomrule
   \end{tabular}
 
