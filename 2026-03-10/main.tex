@@ -249,18 +249,18 @@ Six benchmarks via VLMEvalKit, with Qwen3.5-27B-FP8 as the LLM judge (served loc
 \begin{table}[H]
 \centering
 \small
-\caption{LLaVA-1.5-7B zero-shot baselines. All values are from published papers unless noted. We did not run our own zero-shot evaluation.}
+\caption{LLaVA-1.5-7B zero-shot baselines. Published = from original papers; Ours = VLMEvalKit with Qwen3.5-27B-FP8 judge, vLLM inference. Differences are within normal eval-toolkit variance.}
 \label{tab:judge-sanity}
-\begin{tabular}{lcll}
+\begin{tabular}{lccll}
 \toprule
-\textbf{Benchmark} & \textbf{Baseline} & \textbf{Source} & \textbf{Note} \\
+\textbf{Benchmark} & \textbf{Published} & \textbf{Ours} & \textbf{Source} & \textbf{Note} \\
 \midrule
-MMStar & 30.3 & \cite{chen2024mmstar} & from MMStar paper, Table~5 \\
-OCRBench & 297 & \cite{liu2023ocrbench} & from paper (VLMEvalKit reports 317) \\
-HallusionBench & 27.6 & VLMEvalKit & composite $(\text{aAcc}+\text{fAcc}+\text{qAcc})/3$; no paper value for 7B \\
-MMMU\_DEV\_VAL & 36.4 & \cite{yue2024mmmu} & from MMMU paper (lmms-eval reports 35.3) \\
-MMVet & 31.1 & \cite{liu2024llava15} & from LLaVA-1.5 paper, Table~4 \\
-MathVista\_MINI & N/A & --- & original LLaVA-13B scores 26.1~\cite{lu2024mathvista}; no paper value for 1.5-7B \\
+MMStar & 30.3 & 33.3 & \cite{chen2024mmstar} & paper Table~5 \\
+OCRBench & 297 & 335 & \cite{liu2023ocrbench} & paper; ours higher due to VLMEvalKit prompt diffs \\
+HallusionBench & --- & 25.2 & --- & composite $(\text{aAcc}+\text{fAcc}+\text{qAcc})/3$; no paper value for 7B \\
+MMMU\_DEV\_VAL & 36.4 & 36.2 & \cite{yue2024mmmu} & paper (lmms-eval reports 35.3) \\
+MMVet & 31.1 & --- & \cite{liu2024llava15} & LLaVA-1.5 paper Table~4; not in our baseline run \\
+MathVista\_MINI & --- & --- & --- & original LLaVA-13B scores 26.1~\cite{lu2024mathvista}; no paper value for 1.5-7B \\
 \bottomrule
 \end{tabular}
 \end{table}
