@@ -325,7 +325,7 @@ Before any tool call, the agent reviews all prior episodes from seed memory:
 3. \textbf{Mix ratio computation}: Manually verify that captcha gets a non-zero share (e.g., \textasciitilde10-15\%) to help OCRBench, while keeping strong instruction sources (llava\_instruct, cosyn\_chart) at \textasciitilde25-30\% each.
 \end{agentthought}
 
-\noindent Key decision: the agent explicitly \textbf{skips text-based filtering}:a learned correction from Ep~3, where \texttt{quality\_filter} collapsed MMStar to 1\%.
+\noindent Key decision: the agent explicitly \textbf{skips text-based filtering}. It attributes Ep~3's MMStar collapse to \texttt{quality\_filter}, though the actual trace shows the agent rolled back aggressive filters and recovered the data --- the true cause of the 1\% score remains unclear (possibly the zombie-crashed first finetune or a \texttt{save\_to\_disk} row duplication bug).
 
 \subparagraph{Steps 1--6:Profile and filter (lines 45--106).}
 \mbox{}
@@ -403,7 +403,7 @@ The tool expects effective\_sizes count to match number of active datasets (incl
 
 \subparagraph{Analysis.}
 \begin{enumerate}
-    \item \textbf{Cross-episode learning}: Reviews 4 prior episodes, correctly attributes Ep~3's MMStar collapse to \texttt{quality\_filter}, explicitly avoids it.
+    \item \textbf{Cross-episode learning}: Reviews 4 prior episodes and formulates a hypothesis (that \texttt{quality\_filter} caused Ep~3's collapse). Whether the attribution is correct is unclear (see note above), but the resulting decision to skip text filtering is operationally sound.
     \item \textbf{Data-driven plan revision}: Drops captcha despite planning 10--15\%. Data overrides the prior plan.
     \item \textbf{Emergent quantitative reasoning}: Derives proportional effective-size estimates unprompted. All arithmetic correct.
     \item \textbf{Self-correction}: Diagnoses argument count mismatch and fixes in one step.
