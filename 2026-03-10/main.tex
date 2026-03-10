@@ -3,8 +3,6 @@
     {}
     {\meetinglinks{
         \meetinglink{Smelly Tool Descriptions (Feb 2026)}{https://arxiv.org/abs/2602.14878}
-        \meetinglink{CoALA: Cognitive Architectures for Language Agents}{https://arxiv.org/abs/2309.02427}
-        \meetinglink{Self-Evolving Agents Survey (Fang+ 2025)}{https://arxiv.org/abs/2502.01248}
     }}
     {\begin{itemize}
         \item Pipeline fixes: dropped DeepSpeed for HF Trainer, fixed image padding, replaced GPT-4o judge with local Qwen3.5-27B-FP8, fixed batch size OOM, made training limits configurable
@@ -19,12 +17,12 @@
 %% SECTION: TOOL DESCRIPTION DESIGN
 %% ============================================================
 
+\newpage
 \section{Tool Description Design}
 
 \subsection{How tool definitions reach the model}
 
-% TODO: source citations for this subsection
-In tool-calling LLM systems, tool definitions (name, description, parameter schema) are not passed through a side channel --- they are serialized into the model's context window as part of the system prompt. Each provider uses a model-specific format (Figure~\ref{fig:tool-formats}): the tool description is rendered by a chat template into literal prompt text that competes for attention with task instructions and conversation history. HuggingFace Transformers exposes this via the \texttt{tools} parameter of \texttt{apply\_chat\_template}, which passes tool JSON schemas through the model's Jinja2 template to produce the final prompt string.
+In tool-calling LLM systems, tool definitions (name, description, parameter schema) are not passed through a side channel. They are serialized into the model's context window as literal prompt text, placed in either the system or user turn depending on the provider\footnote{See e.g.\ the OpenAI Harmony format specification: \url{https://developers.openai.com/cookbook/articles/openai-harmony}} (Figure~\ref{fig:tool-formats}). HuggingFace Transformers exposes this via the \texttt{tools} parameter of \texttt{apply\_chat\_template}, which passes tool JSON schemas through the model's Jinja2 template to produce the final prompt string.
 
 This means tool description quality has a direct effect on agent behavior: a vague or noisy description wastes context tokens and increases the chance of incorrect tool selection or malformed arguments. The description is, in effect, the API contract between the tool developer and the LLM policy.
 
@@ -45,8 +43,7 @@ This means tool description quality has a direct effect on agent behavior: a vag
 \begin{figure}[H]
 \centering
 \small
-\caption{The same tool JSON schema rendered into prompt text by four providers. gpt-oss-120b, Qwen~3.5, and Llama~3.1 verified via \texttt{apply\_chat\_template}; Anthropic format from API documentation. The description field (highlighted) appears verbatim in each --- it is literal prompt text, not metadata.}
-\label{fig:tool-formats}
+\begin{minipage}{0.8\linewidth}
 
 \begin{tcolorbox}[enhanced, colback=anthropicbg, colframe=anthropicframe, boxrule=0.8pt, left=4pt, right=4pt, top=4pt, bottom=3pt, sharp corners,
   attach boxed title to top left={xshift=4pt, yshift=-2pt},
@@ -130,24 +127,21 @@ a JSON for a function call ...\\
 Filter the dataset<|eot\_id|>
 \end{tcolorbox}
 
+\end{minipage}
+\caption{One tool schema, four prompt formats. The highlighted description appears verbatim in each. Tool descriptions are literal prompt text, not metadata.}
+\label{fig:tool-formats}
 \end{figure}
 
-\subsection{Smelly tool descriptions}
-
-Hasan et al.~\cite{smellyToolDesc2026} study 856 MCP tool descriptions and find 97.1\% contain at least one ``smell'' --- a structural deficiency such as unclear purpose, missing constraints, or leaked implementation details. 56\% have an unclear purpose specifically.
-
-They decompose tool descriptions into six components and ablate each. Augmenting all six improves task success by 5.85 pp (median), but ablations show that \textbf{Examples} can be removed with no statistically significant degradation, while \textbf{Purpose} is essential in every effective combination.
-
-\subsection{Our format: Purpose / Guidelines / Limitations}
+\subsection{Restructuring tool descriptions}
 
 \definecolor{purposebg}{HTML}{FDECEA}
 \definecolor{guidelinesbg}{HTML}{FFF9E6}
 \definecolor{limitationsbg}{HTML}{E6F0FA}
 
-We adopt the minimal effective set from~\cite{smellyToolDesc2026} and rewrote all 20+ tool descriptions: \colorbox{purposebg}{\textbf{Purpose}} (what the tool does + what it returns), \colorbox{guidelinesbg}{\textbf{Guidelines}} (when to use it + ordering constraints), \colorbox{limitationsbg}{\textbf{Limitations}} (failure modes + performance constraints). Below are three verbatim docstrings from the codebase showing this format applied to tools at different pipeline stages.
+Hasan et al.~\cite{smellyToolDesc2026} synthesize six tool description components (Purpose, Guidelines, Limitations, Parameter Explanation, Examples, Length \& Completeness) from Anthropic's official docs, practitioner blogs, and prior work, then ablate them across 856 MCP tools and four models. Across four models and six domains (finance, 3D design, browser automation, location navigation, repo management, web search), agents with all six components achieve +5.85 pp median success rate and +15.12\% average evaluator score, at the cost of 67.46\% more execution steps. However, 16.67\% of domain-model combinations regress, Purpose is essential in every effective combination, and the best combination is domain- and model-dependent. Their strongest reduced set, P+G+L+PEx (everything minus Examples), was stable in 60\% of domain-model pairs. I dropped Parameter Explanation as well because our tools have simple parameters (typically just a \texttt{dataset\_id}), leaving three components: \colorbox{purposebg}{\textbf{Purpose}} (what the tool does and returns), \colorbox{guidelinesbg}{\textbf{Guidelines}} (when to use it and ordering constraints), and \colorbox{limitationsbg}{\textbf{Limitations}} (failure modes and performance constraints). Below are three verbatim docstrings from the codebase showing this format applied to tools at different pipeline stages.
 
 \medskip
-\noindent\textbf{\texttt{vlm\_filter}} \textit{(preselection --- image structural quality)}
+\noindent\textbf{\texttt{vlm\_filter}} \textit{(preselection, image structural quality)}
 \begin{tcolorbox}[enhanced, colback=white, colframe=black!60, boxrule=0.6pt, left=6pt, right=6pt, top=0pt, bottom=0pt, sharp corners, boxsep=0pt]
 \colorbox{purposebg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
@@ -160,7 +154,7 @@ breakdown.\vspace{4pt}
 \ttfamily\scriptsize\vspace{4pt}
 \textbf{Guidelines}: Run on each dataset after profile\_datasets
 and before text-based filters. Only requires the
-dataset\_id --- thresholds are fixed. Safe on all
+dataset\_id; thresholds are fixed. Safe on all
 dataset types.\vspace{4pt}
 }}\\[-1pt]
 \colorbox{limitationsbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
@@ -168,12 +162,12 @@ dataset types.\vspace{4pt}
 \textbf{Limitations}: Requires loading full image data into
 memory (calls ensure\_full internally). Slow on large
 datasets with many shards. Does not assess image
-content quality --- only structural properties.\vspace{4pt}
+content quality, only structural properties.\vspace{4pt}
 }}
 \end{tcolorbox}
 
 \medskip
-\noindent\textbf{\texttt{submit\_finetune}} \textit{(postselection --- training)}
+\noindent\textbf{\texttt{submit\_finetune}} \textit{(postselection, training)}
 \begin{tcolorbox}[enhanced, colback=white, colframe=black!60, boxrule=0.6pt, left=6pt, right=6pt, top=0pt, bottom=0pt, sharp corners, boxsep=0pt]
 \colorbox{purposebg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
@@ -181,16 +175,16 @@ content quality --- only structural properties.\vspace{4pt}
 }}\\[-1pt]
 \colorbox{guidelinesbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
-\textbf{Guidelines}: Run after save\_to\_disk. Pass the dataset\_id of the mixed dataset (e.g.\ ``vqav2+captcha+cosyn\_chart''). All training hyperparameters (learning rate, epochs, batch size) are fixed by the task YAML --- you only control which data to train on. The returned job\_id is required by submit\_eval.\vspace{4pt}
+\textbf{Guidelines}: Run after save\_to\_disk. Pass the dataset\_id of the mixed dataset (e.g.\ ``vqav2+captcha+cosyn\_chart''). All training hyperparameters (learning rate, epochs, batch size) are fixed by the task YAML. You only control which data to train on. The returned job\_id is required by submit\_eval.\vspace{4pt}
 }}\\[-1pt]
 \colorbox{limitationsbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
-\textbf{Limitations}: Blocking call --- typically takes 10--30 minutes depending on dataset size. Training is capped at max\_steps from the task config. Cannot be cancelled once started. All hyperparameters are fixed --- the agent has no control over training configuration.\vspace{4pt}
+\textbf{Limitations}: Blocking call. Typically takes 10--30 minutes depending on dataset size. Training is capped at max\_steps from the task config. Cannot be cancelled once started. All hyperparameters are fixed. The agent has no control over training configuration.\vspace{4pt}
 }}
 \end{tcolorbox}
 
 \medskip
-\noindent\textbf{\texttt{submit\_eval}} \textit{(postselection --- evaluation)}
+\noindent\textbf{\texttt{submit\_eval}} \textit{(postselection, evaluation)}
 \begin{tcolorbox}[enhanced, colback=white, colframe=black!60, boxrule=0.6pt, left=6pt, right=6pt, top=0pt, bottom=0pt, sharp corners, boxsep=0pt]
 \colorbox{purposebg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
@@ -198,44 +192,35 @@ content quality --- only structural properties.\vspace{4pt}
 }}\\[-1pt]
 \colorbox{guidelinesbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
-\textbf{Guidelines}: Run after submit\_finetune. Pass model\_id set to the job\_id returned by submit\_finetune (e.g.\ ``ft-abc123'') --- do NOT pass a filesystem path. Benchmarks are configured automatically from the task YAML. Use the returned scores to inform the next episode's data curation strategy.\vspace{4pt}
+\textbf{Guidelines}: Run after submit\_finetune. Pass model\_id set to the job\_id returned by submit\_finetune (e.g.\ ``ft-abc123''). Do NOT pass a filesystem path. Benchmarks are configured automatically from the task YAML. Use the returned scores to inform the next episode's data curation strategy.\vspace{4pt}
 }}\\[-1pt]
 \colorbox{limitationsbg}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
 \ttfamily\scriptsize\vspace{4pt}
-\textbf{Limitations}: Blocking call --- evaluation time scales with number of benchmarks (typically 15--45 minutes total). Benchmarks and evaluation protocol are fixed by the task config --- the agent cannot select which benchmarks to run. Requires a running vLLM inference server and judge model.\vspace{4pt}
+\textbf{Limitations}: Blocking call. Evaluation time scales with number of benchmarks (typically 15--45 minutes total). Benchmarks and evaluation protocol are fixed by the task config. The agent cannot select which benchmarks to run. Requires a running vLLM inference server and judge model.\vspace{4pt}
 }}
 \end{tcolorbox}
-
-\subsection{Parameter defaults as implicit guidance}
-
-We also shifted \textbf{parameter defaults} to prevent silent data loss. For example, \texttt{quality\_filter} had \texttt{min\_answer\_words=2}, which silently filtered valid single-word VQA answers (``yes'', ``3'', ``red''). Defaults changed to 0 (disabled) with activation logic moved to Guidelines: ``Only raise these for caption or instruction datasets.'' Default values are part of the tool schema the model sees --- unsafe defaults are another form of smelly description.
 
 
 %% ============================================================
 %% SECTION 2: EXPERIMENTAL SETUP
 %% ============================================================
 
+\newpage
 \section{Experimental Setup}
 \label{sec:setup}
 
-\subsection{Data}
+\subsection{Data and fine-tuning}
 
-Five datasets from FineVision5, each containing 10k samples of image--text pairs (VQA, captioning, OCR, instruction-following). The agent's sample budget is 10k total --- it must select and mix from the available 50k. One dataset (captcha) is consistently auto-excluded by \texttt{vlm\_filter} due to structural image failures, leaving 4 effective source datasets.
+Five datasets from FineVision5, each containing 10k samples of image--text pairs (VQA, captioning, OCR, instruction-following). The agent's sample budget is 10k total, so it must select and mix from the available 50k. One dataset (captcha) is consistently auto-excluded by \texttt{vlm\_filter} due to structural image failures, leaving 4 effective source datasets.
 
-\subsection{Fine-tuning}
+The target model is LLaVA-1.5-7B, full fine-tuned on a single H200 (140GB). Vision tower frozen; only the language model and multimodal projector are trained.
 
-LLaVA-1.5-7B full fine-tune on a single H200 (140GB). Vision tower frozen; only the language model and multimodal projector are trained.
-
-Two fixes from the previous setup:
-\begin{enumerate}
-    \item \textbf{Dropped DeepSpeed for HF Trainer + Accelerate.} DeepSpeed ZeRO-3 added complexity without benefit on a single GPU. Switching to plain HF Trainer via \texttt{accelerate launch} simplified the stack and eliminated rank-cleanup exit code bugs. Liger kernel~\cite{hsu2024liger} provides fused RoPE/RMSNorm/SwiGLU/CrossEntropy on the Llama backbone for comparable memory savings.
-    \item \textbf{Fixed image padding.} HF's \texttt{CLIPImageProcessor} does resize $\to$ center-crop, which loses edge content on non-square images. We replicate the original LLaVA \texttt{expand2square()} --- padding to square with CLIP image mean as background --- so that center-crop becomes a no-op on the spatial dimension. The data collator also now pads token sequences properly (pad token $=$ eos, labels $=$ $-100$) instead of relying on DeepSpeed's implicit handling.
-\end{enumerate}
+Two fixes from the previous setup: replaced DeepSpeed with plain HF Trainer + Liger kernel~\cite{hsu2024liger} for simpler single-GPU training, and restored LLaVA's \texttt{expand2square()} image padding to prevent center-crop from losing edge content.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Fine-tuning hyperparameters. All fixed by the task configuration --- the agent controls only which data is selected.}
+\caption{Fine-tuning hyperparameters. All fixed by the task configuration. The agent controls only which data is selected.}
 \label{tab:finetune-config}
 \begin{tabular}{ll}
 \toprule
@@ -277,13 +262,14 @@ MathVista\_MINI & 26.1 & 25.4 & \cite{lu2024mathvista} & VLMEvalKit run \\
 \end{tabular}
 \end{table}
 
-\noindent Judge-dependent benchmarks (MMVet, MathVista) differ by $<$1 point from published baselines --- acceptable for relative comparisons across curation runs. The reward signal used by the agent is a normalized composite of these benchmark scores.
+\noindent Judge-dependent benchmarks (MMVet, MathVista) differ by $<$1 point from published baselines, acceptable for relative comparisons across curation runs. The reward signal used by the agent is a normalized composite of these benchmark scores.
 
 
 %% ============================================================
 %% SECTION 3: EPISODE RESULTS
 %% ============================================================
 
+\newpage
 \section{Episode Results}
 
 With all fixes applied, the agent runs the full loop on the setup described in Section~\ref{sec:setup}.
