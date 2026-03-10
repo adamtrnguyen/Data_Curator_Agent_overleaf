@@ -459,11 +459,7 @@ submit\_eval(model\_id="ft-e95ca9d3", model\_family="auto")\\
 %% ============================================================
 
 \meetingtasks{
-    \item \done{Complete Ep~5 eval and update results table}
-    \item \done{Implement seed memories for cross-episode learning (injected via \texttt{--seed-memories})}
-    \item \todo{Run 5+ episode stress test with eval feedback: does the agent improve curation strategy across episodes?}
-    \item \todo{Fix zombie subprocess management: GPU OOM caused 3/5 episode failures}
-    \item \todo{Add CLIP score filter and SemDeDup to tool suite}
-    \item \todo{Measure token cost per episode and identify context window pressure points}
-    \item \todo{Read multi-agent literature (51 papers collected) and extract design decisions for sub-agent architecture}
+    \item \todo{Stabilize eval/train subprocess lifecycle: GPU OOM from zombie processes caused 3/5 episode failures. Need process-group cleanup, GPU memory fence between finetune and eval, and automatic retry on OOM.}
+    \item \todo{Run 10+ episode stress test: let the agent run overnight with seed memories and measure whether curation strategy improves from eval feedback across episodes.}
+    \item \todo{Multi-agent systems literature review: 51 papers collected. Extract design decisions for sub-agent architecture (task decomposition, communication protocols, shared memory).}
 }
