@@ -171,25 +171,3 @@ The Executor described \emph{what} to do; the \texttt{coder} tool generated \emp
 \paragraph{Iterative error recovery (Phases 5--6).}
 Phase 4 attempted to sample \texttt{ocrvqa} but the generated code imported \texttt{random} (blocked by the sandbox). Phase 5's Planner reasoning: \emph{``ocrvqa failed with ImportError---code likely used import random, which is blocked. Fix: no extra imports, just row indices with numpy.''} Phase 6 succeeded with a simpler approach.
 
-%% ============================================================
-%% KEY FINDINGS + TASKS
-%% ============================================================
-
-\keyfindings{
-    \item \textbf{Free-form tool selection fails for multi-step curation.}
-        LLMPolicy and ModalPolicy both produced noisy, ungrounded curation decisions that compounded into destructive spirals through the train $\to$ eval loop.
-    \item \textbf{Sub-agent tools (\texttt{coder}, \texttt{research}) are necessary but not sufficient.}
-        External knowledge and validated code generation address capability gaps, but the agent still needs structure to use them effectively.
-    \item \textbf{Three interaction modes capture the curation workflow.}
-        Hypothesis (reasoning), exploration (data observation), and implementation (transforms + research) provide natural phase boundaries for the plan $\to$ execute $\to$ reflect loop.
-    \item \textbf{Minimal executor context prevents coherence loss.}
-        Per-step fresh prompts with only routine + state + recent results eliminate the context bloat that degraded LLMPolicy over long episodes.
-}
-
-\meetingtasks{
-    \item Run RoutinePolicy end-to-end on FineVision5 (Helios4) and compare against LLMPolicy baseline.
-    \item Measure token cost per episode: RoutinePolicy (planner + executor) vs.\ LLMPolicy (single context).
-    \item Evaluate whether the hypothesis $\to$ exploration $\to$ implementation loop converges faster than unstructured exploration.
-    \item Add figure for RoutinePolicy architecture diagram.
-    \item Test multi-episode runs: does the Planner improve strategy across episodes via reflective summaries?
-}
