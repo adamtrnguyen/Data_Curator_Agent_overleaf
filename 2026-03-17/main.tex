@@ -18,15 +18,23 @@
 
 \section{Limitations of Previous Single-Agent Implementations}
 
-Before the RoutinePolicy, two single-agent policies were tested: LLMPolicy (free-form tool selection) and ModalPolicy (mode-switching with separate planning/execution phases). Across 11 evaluation runs spanning both architectures, \textbf{no run achieved more than 49\% budget utilization}, 3 of 11 never submitted a dataset, and 8 of 11 destroyed at least one dataset by removing 90\%+ of its rows.
+Two single-agent policies were tested before the RoutinePolicy: LLMPolicy (free-form tool selection) and ModalPolicy (mode-switching with separate planning/execution phases). Across 11 runs spanning both architectures, no run achieved more than 49\% budget utilization, 3 of 11 never submitted a dataset, and 8 of 11 destroyed at least one dataset by removing 90\%+ of its rows.
 
 \subsection{Research Does Not Transfer to Execution}
 
-Agents produce correct research findings, then immediately contradict them during implementation. In a ModalPolicy run, the agent concluded that \emph{``VQAv2 answers are almost always short (1--3 tokens)''} and that word-count filters would be destructive. It then applied exactly those filters: \texttt{llava\_instruct} dropped from 157,710 to \textbf{54 rows} (99.97\% removed), \texttt{vqav2} to \textbf{298 rows} on the dataset it just said to protect, and \texttt{ocrvqa} to \textbf{86 rows}. This is not a capability problem. The knowledge exists but does not survive the boundary between reasoning and action.
+Agents produce correct research findings, then immediately contradict them during implementation.
+
+In a ModalPolicy run, the agent concluded that ``VQAv2 answers are almost always short (1--3 tokens)'' and that word-count filters would be destructive. It then applied exactly those filters: \texttt{llava\_instruct} dropped from 157,710 to 54 rows (99.97\% removed), \texttt{vqav2} to 298 rows on the dataset it just said to protect, and \texttt{ocrvqa} to 86 rows.
+
+This is not a capability problem. The knowledge exists but does not survive the boundary between reasoning and action.
 
 \subsection{Errors Compound into Destructive Spirals}
 
-Without a hypothesis-testing loop, failures escalate rather than self-correct. In 10 of 11 runs, agents retried the same failing tool call with minor rephrasing rather than changing strategy (up to 12 consecutive identical attempts). When retries failed, agents escalated: one MAS agent switched from failed \texttt{coder} calls to \texttt{drop\_samples} and deleted \emph{every row} from 3 of 5 datasets, rationalizing each as ``hostile rows.'' ModalPolicy runs averaged 5 rollbacks per episode, burning 30\%+ of steps on filter/rollback cycles without questioning the approach. Table~\ref{tab:destructive} shows this pattern was universal across policies.
+Without a hypothesis-testing loop, failures escalate rather than self-correct.
+
+In 10 of 11 runs, agents retried the same failing tool call with minor rephrasing rather than changing strategy (up to 12 consecutive identical attempts). When retries failed, agents escalated. One MAS agent switched from failed \texttt{coder} calls to \texttt{drop\_samples} and deleted every row from 3 of 5 datasets, rationalizing each as ``hostile rows.'' ModalPolicy runs averaged 5 rollbacks per episode, burning 30\%+ of steps on filter/rollback cycles without questioning the approach.
+
+Table~\ref{tab:destructive} shows this pattern was universal across policies.
 
 \begin{table}[H]
 \centering
@@ -48,7 +56,9 @@ LLM        & ocr\_vqa           & 1000      & \textbf{0}       & keyword filter 
 
 \subsection{Root Cause: No Hypothesis-Testing Loop}
 
-All three architectures failed for the same reason: linear execution with no feedback. When a filter removed 99.97\% of data, the agent did not pause to ask \emph{why}. It rolled back and tried softer thresholds, or escalated to deletion. Mode-switching (ModalPolicy) added overhead without forcing genuine reflection. Table~\ref{tab:aggregate} confirms the pattern is systematic.
+All three architectures failed for the same reason: linear execution with no feedback. When a filter removed 99.97\% of data, the agent did not pause to ask why. It rolled back and tried softer thresholds, or escalated to deletion. Mode-switching added overhead without forcing genuine reflection.
+
+Table~\ref{tab:aggregate} confirms the pattern is systematic across all policy types.
 
 \begin{table}[H]
 \centering
@@ -66,17 +76,6 @@ Mean budget utilization & 42\% & 44\% & 50\% & 44\% \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\subsection{Bridging the Gap: Sub-Agent Tools}
-
-Two new tools were introduced to address the core deficiencies:
-
-\begin{itemize}
-    \item \textbf{\texttt{research}} --- spawns a Claude Code subprocess with access to Brave Search, Semantic Scholar, and arXiv. Gives the agent access to external domain knowledge so curation decisions can be grounded in evidence rather than guessing.
-    \item \textbf{\texttt{coder}} --- translates natural-language intent into validated pyarrow code via a Claude Code subprocess. Eliminates hallucinated API calls by generating code through a capable code model rather than the policy LLM.
-\end{itemize}
-
-\noindent These tools address the \emph{capability} gap, but tools alone were not enough. As the MAS runs demonstrate (Table~\ref{tab:aggregate}), even with sub-agent delegation the agent still wandered, retried failing calls, and destroyed data. Without structure to decide \emph{when} to research, \emph{what} to explore, and \emph{how} to iterate, capability improvements do not translate into better outcomes. This motivates the RoutinePolicy architecture (Section~\ref{sec:routine}).
 
 %% ============================================================
 %% SECTION 2: ROUTINE AGENTIC DESIGN
