@@ -1,0 +1,179 @@
+\meetingheader
+    {Mar 17, 2026}
+    {ae1fc12}
+    {\meetinglinks{
+        \meetinglink{Routine Framework}{https://arxiv.org/abs/2507.14447}
+    }}
+    {\begin{itemize}
+        \item Previous single-agent policies (LLMPolicy, ModalPolicy) failed: wandering, hallucinated APIs, destructive curation spirals
+        \item New RoutinePolicy architecture: Planner generates one phase at a time, Executor follows step-by-step with minimal context
+        \item Three interaction modes: hypothesis (reasoning), exploration (data), implementation (transforms + research)
+        \item Sub-agents (\texttt{coder}, \texttt{research}) ground decisions in evidence and validated code
+    \end{itemize}}
+    {}
+
+%% ============================================================
+%% SECTION 1: LIMITATIONS OF PREVIOUS IMPLEMENTATIONS
+%% ============================================================
+
+\section{Limitations of Previous Single-Agent Implementations}
+
+Before the RoutinePolicy, two single-agent policies were tested: LLMPolicy (free-form tool selection) and ModalPolicy (mode-switching with separate planning/execution phases). Both failed to produce meaningful curation.
+
+\subsection{LLMPolicy: No Structure, No Progress}
+
+LLMPolicy gave the LLM full freedom over tool selection with no planning structure. The result was \textbf{wandering and repetition}: the agent could not decide on a coherent strategy, failed to generate working code, and could not meaningfully read or edit sample-level entries. Without structure to guide tool selection, the agent would cycle between profiling and thinking without ever committing to a transform.
+
+\subsection{ModalPolicy: Research--Implementation Disconnect}
+
+ModalPolicy introduced three cognitive modes (strategic $\to$ observation $\to$ implementation) to impose structure. While the strategic mode produced \emph{reasonable plans grounded in research}, the implementation mode ignored them. Concrete failures from a representative run:
+
+\paragraph{Destructive filtering despite correct research.}
+The agent researched VQA answer distributions and correctly concluded that \emph{``VQAv2 answers are almost always short (1--3 tokens), following the standard VQA format''} and that word-count filters would be destructive. It then immediately applied length filters that destroyed the data:
+
+\begin{itemize}
+    \item \texttt{llava\_instruct}: 157,710 $\to$ \textbf{54 rows} (99.97\% removed) with \texttt{MIN\_TURNS=5, MIN\_USER\_LEN=100, MIN\_ASSIST\_LEN=100}. Rolled back.
+    \item \texttt{vqav2}: $\to$ \textbf{298 rows} with \texttt{MIN\_TURNS=3, MIN\_USER\_LEN=60}---applied to a dataset where 92\% of answers are single words.
+    \item \texttt{ocrvqa}: $\to$ \textbf{86 rows} after keyword filtering. Rolled back.
+\end{itemize}
+
+\paragraph{Repeated failed code execution.}
+Six consecutive \texttt{execute\_code} calls on \texttt{ocrvqa} with the same keyword filter pattern, all failing to produce a working transform, before finally yielding 86~rows on the sixth attempt---which was immediately rolled back.
+
+\paragraph{Budget underuse.}
+Given a 10,000-sample budget, the agent submitted only \textbf{3,422 rows} (34\% utilization): VQAv2~298, captcha~1000, cosyn\_chart~624, llava\_instruct~500, ocrvqa~1000.
+
+\paragraph{Text dumps instead of tool calls.}
+After 50+ steps, the agent emitted a 2000-word text response restating its entire strategy instead of calling a tool---then repeated the identical text on the next turn. Zero progress across two consecutive steps.
+
+\subsection{Root Cause: No Iterative Reasoning}
+
+Both policies shared the same fundamental failure: \textbf{no hypothesis testing loop}. The agent would research, form a plan, then execute it linearly without checking whether the results matched expectations. When a filter removed 99.97\% of data, the agent did not pause to ask \emph{why}---it either rolled back and tried slightly softer thresholds, or moved on. There was no mechanism to cycle between reasoning, observation, and action.
+
+\subsection{Bridging the Gap: Sub-Agent Tools}
+
+Two new tools were introduced to address the core deficiencies:
+
+\begin{itemize}
+    \item \textbf{\texttt{research}} --- spawns a Claude Code subprocess with access to Brave Search, Semantic Scholar, and arXiv. Gives the agent access to external domain knowledge so curation decisions can be grounded in evidence rather than guessing.
+    \item \textbf{\texttt{coder}} --- translates natural-language intent into validated pyarrow code via a Claude Code subprocess. Eliminates hallucinated API calls by generating code through a capable code model rather than the policy LLM.
+\end{itemize}
+
+\noindent These tools address the \emph{capability} gap, but tools alone were not enough. Without structure to decide \emph{when} to research, \emph{what} to explore, and \emph{how} to iterate, the agent still wandered. This motivates the RoutinePolicy architecture (Section~\ref{sec:routine}).
+
+%% ============================================================
+%% SECTION 2: ROUTINE AGENTIC DESIGN
+%% ============================================================
+
+\newpage
+\section{Routine Agentic Design}
+\label{sec:routine}
+
+The RoutinePolicy implements a planner-executor architecture inspired by the Routine framework~\cite{xuRoutineTaskDecompositionPlanning2025}. Rather than giving the LLM full control over a long conversation, the architecture separates \emph{strategic planning} from \emph{tactical execution}.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.95\linewidth}{\centering\vspace{2cm}\textbf{[PLACEHOLDER: RoutinePolicy architecture diagram]}\vspace{2cm}}}
+\caption{Overview of the RoutinePolicy architecture. The Planner generates a structured routine (one phase at a time) selecting from three phase types: hypothesis, exploration, and implementation. The Executor follows the routine step-by-step, managing interactions with sub-agents (coder, research) and dataset tools. After each phase, a high-level reflective summary is returned to the Planner, which selects the next routine type and generates another phase.}
+\label{fig:routine-arch}
+\end{figure}
+
+\subsection{Planner: One Phase at a Time}
+
+The Planner (a Claude Code subprocess with full task context) generates \textbf{one phase at a time}, not a full upfront plan. Each phase is a linear sequence of 3--15 tool-call instructions. The Planner selects a phase type from three interaction modes:
+
+\begin{itemize}
+    \item \textbf{Hypothesis} --- internal reasoning and planning. The agent uses \texttt{think} to form or revise hypotheses, strategize, and plan budget allocation. No external tool calls needed; this is where the agent reasons about \emph{what to do next and why}.
+    \item \textbf{Exploration} --- interaction with the data. Profile datasets, inspect samples, run analytical code (\texttt{execute\_code}) to understand distributions. The goal is to \emph{observe and confirm or reject hypotheses} before acting.
+    \item \textbf{Implementation} --- interaction with the outside world and data transforms. Call \texttt{research} for domain knowledge, use \texttt{coder}/\texttt{execute\_code} to apply transforms, \texttt{rollback} to undo mistakes. This is where the agent \emph{acts on its understanding}.
+\end{itemize}
+
+\noindent A terminal \textbf{submission} variant includes \texttt{submit\_dataset} to end the episode.
+
+\subsection{Executor: Minimal Context Per Step}
+
+The Executor (the task LLM, e.g., \texttt{gpt-oss-120b}) follows the routine step-by-step. Each step receives minimal context: the full routine with the current step marked, the current dataset state header, and recent tool results. There is no conversation history accumulation---each step is a fresh, focused prompt. This eliminates the context bloat that caused LLMPolicy to lose coherence over long episodes.
+
+\subsection{Reflective Summaries}
+
+After each phase completes, a high-level reflective summary is constructed from: (1) tool results from each step, and (2) a \texttt{think} synthesis---the agent's own reflection on what it learned and what to investigate next. The think synthesis is the critical carry-forward: it bridges the gap between raw tool outputs and strategic understanding.
+
+This summary is returned to the Planner, which---given the reflective summary plus the full phase history---generates the next routine. The Planner selects whichever of the three interaction modes it deems appropriate, creating the iterative loop:
+
+\begin{center}
+\textbf{plan} $\to$ \textbf{execute} $\to$ \textbf{reflect} $\to$ \textbf{replan}
+\end{center}
+
+\subsection{Validation and Retry}
+
+All tool names in the generated routine are validated against the real tool registry before execution begins. This catches hallucinated tools upfront rather than at runtime. On validation failure, the Planner retries with a fresh prompt (up to 3 attempts). If all attempts fail, the episode terminates with an error rather than silently degrading.
+
+\subsection{Example Run: 6 Phases, 33 Steps}
+
+Table~\ref{tab:routine-phases} shows the phase structure from a representative curation-only run (FineVision5, 10K sample budget, no train/eval). The agent completed in 33 tool calls across 6 phases in 16 minutes.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase trace from a RoutinePolicy curation run. Each phase is planned independently by the Planner based on prior phase results.}
+\label{tab:routine-phases}
+\begin{tabular}{clp{4cm}l}
+\toprule
+\textbf{Phase} & \textbf{Type} & \textbf{Tools} & \textbf{Steps} \\
+\midrule
+1 & hypothesis & think, task\_datasets, research, think & 4 \\
+2 & exploration & execute\_code $\times$5, inspect\_samples $\times$3, think & 9 \\
+3 & implementation & coder $\times$5, inspect\_samples $\times$2, execute\_code, think & 9 \\
+4 & implementation & execute\_code $\times$5, think & 6 \\
+5 & implementation & execute\_code, think & 2 \\
+6 & implementation & execute\_code, think, submit\_dataset & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Research sub-agent (Phase 1, Step 3).}
+The Planner's routine instructed: \emph{``Research what VLMEvalKit benchmarks measure and what training data characteristics improve scores.''} The \texttt{research} tool spawned a Claude Code subprocess with Brave Search and Semantic Scholar access. Key findings from the 6,860-character report:
+
+\begin{itemize}
+    \item \textbf{MMVet}: over-indexing on VQA short answers \emph{hurts} this benchmark; high-quality conversational data (LLaVA-Instruct) is the primary driver.
+    \item \textbf{VQAv2}: 92.8\% of answers are single words---word-count filters would be destructive.
+    \item \textbf{CoIDO}: 20\% data selection achieves 98.2\% of full-data LLaVA-1.5-7B performance.
+    \item \textbf{Recommendation}: reduce VQA proportion to 20--30\% in favor of conversational data.
+\end{itemize}
+
+\paragraph{Coder sub-agent (Phase 3).}
+The Executor described \emph{what} to do; the \texttt{coder} tool generated \emph{how}. Example for \texttt{vqav2}:
+
+\begin{itemize}
+    \item \textbf{Intent}: \emph{``Filter vqav2: remove rows where any turn has empty user or assistant. Deduplicate by first user question. Sample 2500 rows with seed=42.''}
+    \item \textbf{Generated code} (1092 chars): validity filter $\to$ set-based dedup on first user turn $\to$ \texttt{np.random.default\_rng(42)} sampling $\to$ \texttt{result = pa.Table.from\_pylist(sampled)}
+    \item \textbf{Result}: 82,772 $\to$ 2,500 rows (3\% retention via sampling, not destructive filtering)
+\end{itemize}
+
+\noindent Compare with ModalPolicy's approach to the same dataset: applied \texttt{MIN\_TURNS=3, MIN\_USER\_LEN=60} filters that reduced 82,772 $\to$ 298 rows (0.36\% retention), destroying the dataset.
+
+\paragraph{Iterative error recovery (Phases 5--6).}
+Phase 4 attempted to sample \texttt{ocrvqa} but the generated code imported \texttt{random} (blocked by the sandbox). Phase 5's Planner reasoning: \emph{``ocrvqa failed with ImportError---code likely used import random, which is blocked. Fix: no extra imports, just row indices with numpy.''} Phase 6 succeeded with a simpler approach.
+
+%% ============================================================
+%% KEY FINDINGS + TASKS
+%% ============================================================
+
+\keyfindings{
+    \item \textbf{Free-form tool selection fails for multi-step curation.}
+        LLMPolicy and ModalPolicy both produced noisy, ungrounded curation decisions that compounded into destructive spirals through the train $\to$ eval loop.
+    \item \textbf{Sub-agent tools (\texttt{coder}, \texttt{research}) are necessary but not sufficient.}
+        External knowledge and validated code generation address capability gaps, but the agent still needs structure to use them effectively.
+    \item \textbf{Three interaction modes capture the curation workflow.}
+        Hypothesis (reasoning), exploration (data observation), and implementation (transforms + research) provide natural phase boundaries for the plan $\to$ execute $\to$ reflect loop.
+    \item \textbf{Minimal executor context prevents coherence loss.}
+        Per-step fresh prompts with only routine + state + recent results eliminate the context bloat that degraded LLMPolicy over long episodes.
+}
+
+\meetingtasks{
+    \item Run RoutinePolicy end-to-end on FineVision5 (Helios4) and compare against LLMPolicy baseline.
+    \item Measure token cost per episode: RoutinePolicy (planner + executor) vs.\ LLMPolicy (single context).
+    \item Evaluate whether the hypothesis $\to$ exploration $\to$ implementation loop converges faster than unstructured exploration.
+    \item Add figure for RoutinePolicy architecture diagram.
+    \item Test multi-episode runs: does the Planner improve strategy across episodes via reflective summaries?
+}
