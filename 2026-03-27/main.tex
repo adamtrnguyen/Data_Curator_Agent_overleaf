@@ -41,29 +41,26 @@ h-011 & skip & 2 & --- & $\times$ & --- \\
 \end{tabular}
 \end{table}
 
-% ------ Table 2: Dataset allocations ------
+% ------ Table 2: Actual training data per tested hypothesis ------
 \begin{table}[H]
 \centering
 \small
-\caption{Dataset allocation per hypothesis (rows sampled from each source, budget = 50K). Hypotheses h-001/h-004/h-005 propose the same mix; h-006/h-007 propose equal splits; h-008/h-009 propose proportional sampling. h-002/h-003 modify only the COCO component (filter $>$150 char responses) atop the h-001 allocation.}
-\label{tab:hyp-alloc}
-\begin{tabular}{llrrrrrrl}
+\caption{Actual dataset state at each \texttt{test\_hypothesis} call, reconstructed from snapshots. The first h-003 test (step 19) only filtered COCO; the other 4 datasets were still at original size, so \texttt{submit\_finetune} random-subsampled 270K rows to 50K. The second h-003 test and h-005 test trained on identical 50K allocations (the agent re-sampled COCO between them but the row count was unchanged). Episode 3 had no \texttt{test\_hypothesis} call; \texttt{auto\_train\_eval} ran on the final state.}
+\label{tab:hyp-actual}
+\begin{tabular}{llllrrrrrr}
 \toprule
-ID & Ep & COCO & GQA & OCR\_VQA & TextVQA & VG & Total & COCO filter \\
+Ep & Step & Hyp & Eval ID & COCO & GQA & OCR\_VQA & TextVQA & VG & Concat \\
 \midrule
-h-001 & 1 & 10000 & 3047 & 10000 & 21953 & 5000 & 50000 & none \\
-h-002 & 1 & 10000 & 3047 & 10000 & 21953 & 5000 & 50000 & max\_asst $>$150 \\
-h-003 & 1 & 10000 & 3047 & 10000 & 21953 & 5000 & 50000 & max\_asst $>$150 \\
-h-004 & 1 & 10000 & 3047 & 10000 & 21953 & 5000 & 50000 & none \\
-h-005 & 1 & 10000 & 3047 & 10000 & 21953 & 5000 & 50000 & none \\
-h-006 & 1 & 10000 & 10000 & 10000 & 10000 & 10000 & 50000 & none \\
-h-007 & 1 & 10000 & 10000 & 10000 & 10000 & 10000 & 50000 & none \\
-h-008 & 2 & 29150 & 5773 & 6405 & 1757 & 6915 & 50000 & none \\
-h-009 & 2 & 29150 & 5773 & 6405 & 1757 & 6915 & 50000 & none \\
-h-010 & 2 & 35000 & 0 & 5000 & 10000 & 0 & 50000 & avg\_asst $>$200 \\
-h-011 & 2 & 50000 & 0 & 0 & 0 & 0 & 50000 & avg\_asst $>$200 \\
+1 & 19 & h-003 & --- & 10K$^*$ & 72K & 80K & 22K & 86K & 270K$\to$50K \\
+1 & 23 & h-003 & eval-c7ed080e & 10K$^*$ & 3K & 10K & 22K & 5K & 50K \\
+1 & 26 & h-005 & eval-5a1aa93b & 10K & 3K & 10K & 22K & 5K & 50K \\
+2 & 19 & h-009 & eval-dd0df93b & 29K & 6K & 6K & 2K & 7K & 50K \\
+3 & auto & --- & eval-7303c4cb & 50K$^\dagger$ & 1 & 1 & 1 & 1 & 50K \\
 \bottomrule
 \end{tabular}
+
+\vspace{4pt}
+{\footnotesize $^*$COCO filtered: max assistant response $>$150 chars. $^\dagger$COCO filtered: avg assistant $>$200 chars. Row counts rounded to nearest K except where exact (1 row = placeholder).}
 \end{table}
 
 % ------ Table 3: Tested hypothesis evidence ------
