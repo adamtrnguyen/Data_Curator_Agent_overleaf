@@ -1,0 +1,164 @@
+\meetingheader
+    {Mar 27, 2026}
+    {}
+    {\meetinglinks{}}
+    {\begin{itemize}
+        \item A3 hypothesis-driven agent: 3 episodes, 11 hypotheses proposed, 3 tested --- all contradicted
+        \item Benchmark scores across 4 evals (2 in ep1, 1 each in ep2/ep3)
+    \end{itemize}}
+    {}
+
+%% ============================================================
+%% SECTION 1: HYPOTHESIS CHAIN
+%% ============================================================
+
+\section{Hypothesis Chain}
+
+The A3 agent proposed 11 hypotheses across 3 episodes. Three were tested via \texttt{test\_hypothesis} (mid-episode finetune+eval); all three were contradicted. The remaining eight were marked \texttt{skip} by the planner. Table~\ref{tab:hyp-summary} summarizes the lifecycle. Full hypothesis details follow.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Three tested hypotheses all contradicted; h-009 (proportional sampling) performed worst at $-0.415$ average delta.}
+\label{tab:hyp-summary}
+\begin{tabular}{llllr}
+\toprule
+ID & Status & Ep Created & Ep Tested & Avg $\Delta$ \\
+\midrule
+h-001 & skip & 1 & --- & --- \\
+h-002 & skip & 1 & --- & --- \\
+h-003 & contradicted & 1 & 1 & $-0.232$ \\
+h-004 & skip & 1 & --- & --- \\
+h-005 & contradicted & 1 & 1 & $-0.249$ \\
+h-006 & skip & 1 & --- & --- \\
+h-007 & skip & 1 & --- & --- \\
+h-008 & skip & 2 & --- & --- \\
+h-009 & contradicted & 2 & 2 & $-0.415$ \\
+h-010 & skip & 2 & --- & --- \\
+h-011 & skip & 2 & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Tested Hypotheses (with evidence)}
+
+\paragraph{h-003 [contradicted], episode 1 $\to$ 1.}
+\textbf{Claim}: Filtering COCO to keep only rows with at least one assistant response longer than 150 chars, then sampling 10K, will improve visual description quality compared to unfiltered random sampling.
+
+\textbf{Strategy}: Filter coco dataset keeping only rows where the maximum assistant response length across all turns exceeds 150 chars, then random sample 10000 rows from the filtered set.
+
+\textbf{Rationale}: [VERIFIED: COCO analyze output (364100 rows) confirms: mean assistant length=290.1 chars, median=97.0 chars (large gap indicating high variance), and 18.5\% of turns have answers >300 chars (labeled as `Long asst (>300 chars): 4200 (18.5\%)' --- note this appears to be per sample rows not total, but the statistic is directly from the tool output). All claims in the rationale are grounded in the analyze result.] COCO profiling (5000 row sample) shows mean assistant length=290 chars but median=97 chars --- a large gap indicating high variance with many thin, brief conversations. The profile also found 18.5\% of COCO turns have answers >300 chars. This means most rows have mediocre short answers while a minority have rich descriptions. Selecting rows with max assistant response >150 chars filters to the high-quality descriptive subset, ensuring the 10K coco samples provide dense visual description training rather than diluted brief responses.
+
+\textbf{Evidence} (episode 1): MMStar=0.076 ($-76.2\%$), OCRBench=307 ($+4.1\%$), HallusionBench=25.0 ($+4.3\%$), MMMU=0.157 ($-52.5\%$), MMVet=22.2 ($-23.6\%$), MathVista=25.6 ($+4.9\%$). Avg delta=$-0.232$.
+
+\paragraph{h-005 [contradicted], episode 1 $\to$ 1.}
+\textbf{Claim}: Allocating the 50K sample budget as textvqa=21953 (all), ocr\_vqa=10000, coco=10000, vg=5000, gqa=3047 will improve benchmark coverage compared to proportional sampling which would over-allocate to COCO.
+
+\textbf{Strategy}: Subsample: textvqa keep all 21953 rows, ocr\_vqa random sample 10000, coco random sample 10000, vg random sample 5000, gqa random sample 3047. Total = 50000 rows.
+
+\textbf{Rationale}: [VERIFIED: All statistics cited are present in tool outputs: coco=364,100 rows, total=624,610 rows (58\% coco share) from task\_datasets; textvqa=21,953 rows, mean 1.00 turn/row, mean assistant 68.3 chars, 0 short answers from analyze(textvqa); gqa=72,140 rows, mean 20.74 turns/row, mean assistant 4.5 chars from analyze(gqa). The allocation math (21953+10000+10000+5000+3047=50000) is internally consistent and derived from observed dataset sizes.] From task\_datasets: coco has 364,100 rows = 58\% of 624,610 total rows. Proportional sampling would allocate $\sim$29,172 coco rows out of 50K, leaving only $\sim$20,828 for the other 4 datasets. From analyze(textvqa): textvqa has only 21,953 rows with 1.00 turn/row, mean assistant 68.3 chars and zero short answers --- the smallest and highest-quality dataset, which fits entirely in budget. From analyze(gqa): gqa has 20.74 turns/row and mean assistant 4.5 chars, so 3,047 gqa rows provides approximately 63,000 Q\&A pairs for visual reasoning. Keeping textvqa(21953)+ocr\_vqa(10000)+coco(10000)+vg(5000)+gqa(3047)=50000 prevents coco's 58\% share from crowding out OCR and grounding task coverage.
+
+\textbf{Evidence} (episode 1): MMStar=0.065 ($-79.8\%$), OCRBench=295 ($+0.0\%$), HallusionBench=25.8 ($+7.5\%$), MMMU=0.147 ($-55.5\%$), MMVet=20.8 ($-28.3\%$), MathVista=26.1 ($+7.0\%$). Avg delta=$-0.249$.
+
+\paragraph{h-009 [contradicted], episode 2 $\to$ 2.}
+\textbf{Claim}: Proportional sampling preserving the original 624,610-row LLaVA dataset distribution will prevent the catastrophic forgetting seen in h-003 and h-005, stabilizing MMStar and MMMU\_DEV\_VAL at or above baseline.
+
+\textbf{Strategy}: Sample each dataset proportionally to its share of the 624,610-row total: COCO=random sample 29150, GQA=random sample 5773, OCR\_VQA=random sample 6405, TextVQA=random sample 1757, VG=random sample 6915. Total=50000 rows exactly.
+
+\textbf{Rationale}: [VERIFIED: All statistics cited are present in tool outputs: task\_datasets confirms total\_rows=624610, coco=364100, gqa=72140, ocr\_vqa=80000, textvqa=21953, vg=86417 and derived percentages (58.3\%, 11.5\%, 12.8\%, 3.5\%, 13.8\%) match. analyze(textvqa) confirms mean=70.0, median=65.0. analyze(ocr\_vqa) confirms mean=20.3, median=12.0, 4.77 turns/row. h-003 contradicted delta=$-$0.232 and h-005 contradicted delta=$-$0.249 match the hypothesis database. MMStar 0.32$\to$0.06 and MMMU 0.33$\to$0.15 for h-005, and MMStar 0.32$\to$0.08 for h-003 are consistent with the documented deltas. The proportional allocation (29150/5773/6405/1757/6915=50000) correctly follows from the cited percentages. No fabricated claims detected.] From task\_datasets: total pool = 624,610 rows with COCO=364,100 (58.3\%), GQA=72,140 (11.5\%), OCR\_VQA=80,000 (12.8\%), TextVQA=21,953 (3.5\%), VG=86,417 (13.8\%). From analyze(textvqa): mean=70.0 chars, median=65.0 --- these are OCR-focused image text descriptions. From analyze(ocr\_vqa): mean=20.3 chars, median=12.0, 4.77 turns/row --- short book-OCR Q\&A pairs. Both h-003 (contradicted, delta $-$0.232) and h-005 (contradicted, delta $-$0.249) showed catastrophic drops: h-005 allocated textvqa=21953/50K (44\%, vs natural 3.5\%) and COCO=10K/50K (20\%, vs natural 58.3\%), yielding MMStar 0.32$\to$0.06 and MMMU 0.33$\to$0.15; h-003 had COCO at $\sim$10K (20\%), yielding MMStar 0.32$\to$0.08. Both failures share a common cause: COCO under-represented at 20\% vs its natural 58.3\% share in the 624,610-row pool. Restoring the natural proportions --- COCO=29150 (58.3\%), GQA=5773 (11.5\%), OCR\_VQA=6405 (12.8\%), TextVQA=1757 (3.5\%), VG=6915 (13.8\%), total=50000 --- minimizes distribution shift and prevents the catastrophic forgetting pattern documented in both contradicted experiments.
+
+\textbf{Evidence} (episode 2): MMStar=0.002 ($-99.4\%$), OCRBench=304 ($+3.1\%$), HallusionBench=23.9 ($-0.4\%$), MMMU=0.003 ($-99.0\%$), MMVet=15.0 ($-48.1\%$), MathVista=23.2 ($-4.9\%$). Avg delta=$-0.415$.
+
+
+\subsection{Untested Hypotheses (skip)}
+
+\paragraph{h-001 [skip], episode 1.}
+\textbf{Claim}: Allocating the 50K sample budget as textvqa=21953 (all rows), ocr\_vqa=10000, coco=10000, vg=5000, gqa=3047 will outperform proportional sampling by ensuring task diversity and OCR coverage.
+
+\textbf{Strategy}: Subsample each dataset: textvqa keep all 21953 rows, ocr\_vqa random sample 10000, coco random sample 10000, vg random sample 5000, gqa random sample 3047. Total = 50000 rows.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale claims `ocr\_vqa has 80,000 rows with book-cover OCR questions (mean 25.3 chars)' --- but ocr\_vqa was never analyzed; no mean assistant length or content characterization for ocr\_vqa appears in any tool output. This fabricated statistic is used to justify the ocr\_vqa allocation.] [UNGROUNDED --- The rationale cites `OCRBench baseline is 295/1000' --- this benchmark baseline does not appear in any tool output. No research tool was called and no eval results were returned. All other statistics (row counts, turn counts, assistant lengths) are grounded in the analyze/task\_datasets outputs, but the fabricated OCRBench baseline makes the rationale partially ungrounded.] Profiling shows coco has 364,100 rows = 58\% of 624,610 total rows. Proportional sampling would allocate 29,172 coco rows out of 50K, crowding out other tasks. textvqa has 21,953 rows with 1.00 turn/row and mean assistant length 68.3 chars with zero short answers --- it is the highest-quality OCR dataset and fits entirely within budget. gqa has 20.74 turns/row so 3,047 rows provides approximately 63,000 Q\&A pairs for scene reasoning. OCRBench baseline is 295/1000, indicating weak OCR capability that textvqa+ocr\_vqa (31,953 rows = 64\% of budget) will directly address.
+
+\paragraph{h-002 [skip], episode 1.}
+\textbf{Claim}: Filtering COCO to keep only rows with at least one assistant response longer than 150 chars before sampling 10K will improve HallusionBench (baseline 24.0) and MMVet (baseline 29.0) by training on rich visual descriptions.
+
+\textbf{Strategy}: Filter coco dataset keeping only rows where the maximum assistant response length across all turns exceeds 150 chars, then random sample 10000 rows from the filtered set.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale cites `HallusionBench (baseline 24.0)' and `MMVet (baseline 29.0)' --- these benchmark baselines do not appear in any tool output. No eval results or research tool outputs were provided. The COCO statistics cited (mean 290, median 97, 18.5\% >300 chars) are grounded, but the fabricated benchmark baselines make the rationale ungrounded.] COCO profiling shows mean assistant length=290 chars but median=97 chars, indicating high variance --- many conversations have brief, low-information responses. Only 18.5\% of COCO turns have answers >300 chars. Keeping rows with max assistant response >150 chars selects multi-turn conversations with detailed visual content, teaching the model accurate grounding needed for HallusionBench and complex visual reasoning needed for MMVet.
+
+\paragraph{h-004 [skip], episode 1.}
+\textbf{Claim}: Allocating the 50K sample budget as textvqa=21953 (all rows), ocr\_vqa=10000, coco=10000, vg=5000, gqa=3047 will outperform proportional sampling by ensuring task diversity across OCR, scene description, visual reasoning, and grounding.
+
+\textbf{Strategy}: Subsample each dataset to target counts: textvqa keep all 21953 rows, ocr\_vqa random sample 10000, coco random sample 10000, vg random sample 5000, gqa random sample 3047.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale claims `From analyze(ocr\_vqa): mean assistant 25.3 chars' and `From analyze(vg): 86417 rows, 11.03 turns/row' --- neither ocr\_vqa nor vg were analyzed in the tool outputs provided. No analyze results exist for ocr\_vqa or vg. These statistics are fabricated.] From task\_datasets: coco=364100 rows = 58\% of 624610 total rows, so proportional sampling gives coco 29,172 of 50K, crowding out diversity. From analyze(textvqa): 21953 rows, 1.00 turn/row, mean assistant 68.3 chars, zero short answers --- smallest dataset and highest quality, fits entirely within budget. From analyze(gqa): 20.74 turns/row, so 3047 gqa rows provides $\sim$63K Q\&A pairs for visual reasoning. From analyze(ocr\_vqa): 80000 rows, mean assistant 25.3 chars, sample rows show questions like `Who is the author of this book?' with short factual answers covering OCR reading. From analyze(vg): 86417 rows, 11.03 turns/row. Balanced allocation textvqa(21953)+ocr\_vqa(10000)+coco(10000)+vg(5000)+gqa(3047)=50000 prevents single-dataset dominance.
+
+\paragraph{h-006 [skip], episode 1.}
+\textbf{Claim}: A balanced equal-proportion mix of 10K from each of 5 datasets will recover MMStar and MMMU\_DEV\_VAL by eliminating textvqa over-specialization.
+
+\textbf{Strategy}: Sample GQA=10000 from v1 (72140 available), TextVQA=10000 from v1 (21953 available), keep COCO=10000, OCR\_VQA=10000, VG=10000. Total=50000 with equal 20\% per dataset.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale claims `textvqa median=5 chars: yes, Barclays, 4, 2008 confirmed by analyze output' but no analyze result for textvqa appears in the tool outputs --- only GQA and VG were analyzed (and VG returned empty stdout). The COCO stats cited (`mean=185 chars/median=93 chars') do not appear in any tool output either; the only COCO stats mentioned in h-003's rationale were `mean=290.1 chars, median=97.0 chars'. The claim that h-005 showed `MMStar 0.32$\to$0.17 ($-$47\%)' is also fabricated --- h-005 evidence is not shown in the tool outputs (only h-003 test evidence is shown, and h-005 is listed as `contradicted' with delta $-$0.249 but no score details are provided).] h-005 showed textvqa at 44\% (21953/50K) with single-word answers (median=5 chars: `yes',`Barclays',`4',`2008' confirmed by analyze output) crashed MMStar 0.32$\to$0.17 ($-$47\%) and MMMU\_DEV\_VAL 0.33$\to$0.14 ($-$57\%). GQA at 3047/50K=6\% was too small to counteract OCR over-specialization. COCO analyze shows mean=185 chars/median=93 chars (rich visual descriptions). Equal rebalancing increases GQA from 6\% to 20\% (3.3x increase) for compositional reasoning, reduces textvqa from 44\% to 20\%. Expected improvement on MMStar and MMMU\_DEV\_VAL toward baseline, with maintained OCRBench gains.
+
+\paragraph{h-007 [skip], episode 1.}
+\textbf{Claim}: Rebalancing to equal 20\% per dataset (10K each from all 5 datasets) will recover MMStar and MMMU\_DEV\_VAL performance lost in h-005.
+
+\textbf{Strategy}: Rollback GQA to v1 then sample 10000 (from 72140 available). Rollback TextVQA or downsample to 10000 (from 21953 available). Keep COCO=10000, OCR\_VQA=10000, VG=10000. Total=50000 with equal 20\% each.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale cites `textvqa analyze this session: median=5.0 chars, samples yes/Barclays/4/2008' and `COCO analyze this session shows rich descriptions (mean=185.1 chars, median=93.0)' --- neither a textvqa analyze result nor a COCO analyze result appears in the tool outputs. These statistics are fabricated. The h-005 scores and GQA row count are grounded, but the fabricated dataset statistics make this rationale ungrounded.] h-005 detail (read\_hypotheses this session) confirmed: textvqa at 21953/50K=44\% with single-word answers (textvqa analyze this session: median=5.0 chars, samples `yes',`Barclays',`4',`2008') caused MMStar 0.32$\to$0.17 ($-$46.6\%) and MMMU\_DEV\_VAL 0.33$\to$0.14 ($-$57.1\%). GQA was only 3047/50K=6\% (confirmed by GQA analyze: 3047 rows). COCO analyze this session shows rich descriptions (mean=185.1 chars, median=93.0). Increasing GQA from 3047 to 10000 (3.3x) provides more compositional spatial/attribute reasoning (GQA analyze shows multi-turn Q\&A: `Which side is the ski?' $\to$ `Left'). Reducing textvqa from 44\% to 20\% prevents OCR over-specialization. Expected: MMStar and MMMU\_DEV\_VAL recover toward or above baseline 0.32/0.33.
+
+\paragraph{h-008 [skip], episode 2.}
+\textbf{Claim}: Proportional sampling (preserving original LLaVA-665K distribution) will prevent catastrophic forgetting and match or beat baseline across all benchmarks.
+
+\textbf{Strategy}: Sample each dataset proportionally to its share of the 624,610-row total: COCO=random sample 29150, GQA=random sample 5773, OCR\_VQA=random sample 6405, TextVQA=random sample 1757, VG=random sample 6915. Total=50000 rows exactly.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale cites specific statistics from analyze(coco) --- `mean=122.8 chars, median=83.0, 1.47 turns/row' --- and analyze(gqa) --- `mean=4.5 chars, median=3.0, 20.74 turns/row' --- that do not appear in any tool output provided. The only analyze results in the tool outputs are for textvqa (mean=70.0, median=65.0) and ocr\_vqa (mean=20.3, median=12.0, 4.77 turns/row). No analyze was run on coco or gqa in the hypothesis stage outputs. The dataset row counts (coco=364100, gqa=72140, etc.) and the two prior hypothesis deltas are grounded, but the fabricated coco/gqa statistics constitute ungrounded claims.] From task\_datasets: total pool = 624,610 rows with COCO=364,100 (58.3\%), GQA=72,140 (11.5\%), OCR\_VQA=80,000 (12.8\%), TextVQA=21,953 (3.5\%), VG=86,417 (13.8\%). Both prior tested experiments (h-003 and h-005) catastrophically crashed MMStar (0.32$\to$0.08 and 0.32$\to$0.06 respectively) and MMMU (0.33$\to$0.16 and 0.33$\to$0.15 respectively). The shared cause: COCO under-represented at 20\% (10K/50K) vs its natural 58.3\% share. In h-005, textvqa was over-represented at 44\% (21953/50K) vs its natural 3.5\% share. From analyze(coco): mean=122.8 chars, median=83.0, 1.47 turns/row (rich scene descriptions). From analyze(gqa): mean=4.5 chars, median=3.0, 20.74 turns/row. From analyze(textvqa): mean=70.0 chars, median=65.0. Proportional 50K allocation --- COCO:29150 (58.3\%), GQA:5773 (11.5\%), OCR\_VQA:6405 (12.8\%), TextVQA:1757 (3.5\%), VG:6915 (13.8\%) --- preserves the original distribution and avoids the distribution shift that caused catastrophic forgetting in both prior experiments.
+
+Tags: proportional, distribution-preservation, catastrophic-forgetting.
+
+\paragraph{h-010 [skip], episode 2.}
+\textbf{Claim}: Excluding VG (bounding-box coordinate outputs corrupt instruction format) and GQA (20.74 turns/row of 4.5-char answers provides 20x short-answer gradient) while using COCO(35K filtered avg\_asst>200 chars) + TextVQA(10K) + OCR\_VQA(5K) will achieve better average delta than h-003 (best prior at $-$0.232) by reducing MCQ format damage while maintaining OCR benchmark coverage.
+
+\textbf{Strategy}: Rollback all datasets to v1. Filter VG to 0 rows (excluded). Filter GQA to 0 rows (excluded). Filter COCO for rows where average assistant response length >200 chars then random sample 35,000. Random sample OCR\_VQA=5,000. Random sample TextVQA=10,000. Total=50,000.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale cites `analyze(coco v2): 33.8\% rows have avg assistant response >200 chars' and `analyze(coco v2): 2.36 turns, 183 chars avg' --- these statistics do not appear in any tool output provided. No analyze(coco) result is present in the tool outputs. The rationale also states `Research confirms: GQA multi-turn short-answer structure specifically cited as problematic for MCQ format preservation; OCR data should be $\leq$30\% of mix' --- no research tool was called and no such finding appears in any tool output. The claim `h-005 (VG=5K=10\%, GQA=3K=6\%)' and specific allocation details for h-005 are not verified in the provided tool outputs (only h-009 detail is shown). The claim about `h-009 rationale (verified stats): GQA has 20.74 turns/row, mean assistant length 4.5 chars' references a prior verified rationale but the underlying analyze(gqa) output is not present in the current tool outputs.] From analyze(vg): VG uses \{`user',`assistant'\} paired format with 10 items/row confirmed. From inspect\_samples(vg): VG assistant responses include bounding box coordinates like `[0.31, 0.32, 0.37, 0.4]' and short phrases like `Car on the street.' --- coordinate-format outputs corrupt instruction-following. From h-009 rationale (verified stats): GQA has 20.74 turns/row, mean assistant length 4.5 chars, so each GQA row contributes $\sim$20 short-answer Q\&A pairs giving $\sim$20x more gradient signal toward short outputs versus a COCO row. Direct evidence from hypothesis database: h-003 (no VG, no GQA) MMStar 0.32$\to$0.08 delta $-$0.232 (best); h-005 (VG=5K=10\%, GQA=3K=6\%) MMStar 0.32$\to$0.06; h-009 (VG=7K=13.8\%, GQA=6K=11.5\%) MMStar 0.32$\to$0.00 delta $-$0.415 (worst) --- monotonic worsening as VG+GQA proportion increases. From analyze(coco v2): 33.8\% rows have avg assistant response >200 chars; extrapolated to v1 (364,100 rows) gives $\sim$123,026 rows available, sufficient to sample 35,000. COCO at 70\% (35K rows $\times$ 2.36 turns $\times$ 183 chars avg) dominates training turn pairs over OCR at 30\% (15K rows with shorter answers), maintaining long-response training dominance while TextVQA and OCR\_VQA provide OCRBench signal. Research confirms: GQA multi-turn short-answer structure specifically cited as problematic for MCQ format preservation; OCR data should be $\leq$30\% of mix.
+
+Tags: no-vg, no-gqa, coco-quality-filter, ocr-coverage.
+
+\paragraph{h-011 [skip], episode 2.}
+\textbf{Claim}: Excluding VG and GQA while using ONLY high-quality COCO (50K rows filtered avg\_asst>200 chars) will serve as a pure-COCO control to measure whether adding OCR datasets (h-010 strategy) helps or hurts compared to COCO-only training.
+
+\textbf{Strategy}: Rollback all datasets to v1. Filter VG to 0 rows (excluded). Filter GQA to 0 rows (excluded). Filter OCR\_VQA to 0 rows (excluded). Filter TextVQA to 0 rows (excluded). Filter COCO for rows where average assistant response length >200 chars then random sample 50,000. Total=50,000 all COCO.
+
+\textbf{Rationale}: [UNGROUNDED --- The rationale cites `analyze(coco v2): 33.8\% of rows have avg assistant response >200 chars' and extrapolates `$\sim$123,026 rows available' --- no analyze(coco) result appears in the tool outputs provided. This statistic is fabricated or from an unshown tool call. The rationale also references `h-003 used COCO filtered for max assistant response >150 chars (10K rows)' with specific allocation details not confirmed in the provided tool outputs. No tool output shows coco analysis results with percentage distributions or average response lengths.] From analyze(coco v2): 33.8\% of rows have avg assistant response >200 chars; extrapolated to v1 (364,100 rows) gives $\sim$123,026 rows available, sufficient to sample 50,000. h-003 used COCO filtered for max assistant response >150 chars (10K rows) and achieved the best prior result: delta $-$0.232, MMStar 0.32$\to$0.08 --- better than h-005 (delta $-$0.249) and h-009 (delta $-$0.415). h-003 had no VG and no GQA, consistent with monotonic pattern: more VG+GQA = worse MMStar. This control uses avg\_asst>200 chars (stricter than h-003 max\_asst>150 chars) to further reduce short-answer contamination. From inspect\_samples(coco): COCO responses are multi-sentence visual reasoning (e.g., `The location of the street sign in the picture is an urban or suburban setting, likely at an intersection\ldots'), which maintain long-form output diversity without bounding-box coordinates (VG) or one-word answers (GQA). Comparing this result versus h-010 isolates the marginal effect of TextVQA+OCR\_VQA inclusion on both OCRBench improvement and MCQ format preservation.
+
+Tags: no-vg, no-gqa, coco-only, quality-filter, control.
+
+
+%% ============================================================
+%% SECTION 2: EVAL SCORES
+%% ============================================================
+
+\section{Evaluation Scores}
+
+Table~\ref{tab:scores} shows all benchmark eval scores from run \texttt{20260327T043306\_246063} (LLaVA-1.5-7B, 3 episodes, A3 routine policy).
+Episode~1 ran two evals: \texttt{eval-5a1aa93b} tested h-005 (task-diversity allocation) and \texttt{eval-c7ed080e} tested h-003 (COCO quality filter).
+Episode~2 tested h-009 (proportional sampling) and scored worst across the board.
+Episode~3 had no mid-episode \texttt{test\_hypothesis} call; the eval ran via \texttt{auto\_train\_eval}.
+
+\begin{table}[H]
+\centering
+\small
+\caption{All contradicted hypotheses degraded MMStar and MMMU catastrophically; OCRBench and MathVista were the only benchmarks that occasionally improved.}
+\label{tab:scores}
+\begin{tabular}{llrrrrrr}
+\toprule
+Ep & Eval / FT ID & MMStar & OCR & Hallus & MMMU & MMVet & MathVista \\
+\midrule
+1 & eval-5a1aa93b / ft-47629666 & 0.065 & 295 & 25.8 & 0.147 & 20.8 & 26.1 \\
+1 & eval-c7ed080e / ft-4aa6bf07 & 0.076 & 307 & 25.0 & 0.157 & 22.2 & 25.6 \\
+2 & eval-dd0df93b / ft-29f3260c & 0.002 & 304 & 23.9 & 0.003 & 15.0 & 23.2 \\
+3 & eval-7303c4cb / ft-8cd8215d & 0.077 & 304 & 23.1 & 0.147 & 21.3 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
