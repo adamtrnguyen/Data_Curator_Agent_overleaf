@@ -85,14 +85,14 @@ Mean budget utilization & 42\% & 44\% & 50\% & 44\% \\
 \section{Routine Agentic Design}
 \label{sec:routine}
 
-The RoutinePolicy implements a planner-executor architecture inspired by the Routine framework~\cite{xuRoutineTaskDecompositionPlanning2025}. Rather than giving the LLM full control over a long conversation, the architecture separates \emph{strategic planning} from \emph{tactical execution}.
+The RoutinePolicy implements a planner-executor architecture inspired by the Routine framework~\cite{xuRoutineTaskDecompositionPlanning2025}. Rather than giving the LLM full control over a long conversation, the architecture separates \emph{ planning} from \emph{execution}.
 
 \begin{figure}[H]
-\centering
-\fbox{\parbox{0.95\linewidth}{\centering\vspace{2cm}\textbf{[PLACEHOLDER: RoutinePolicy architecture diagram]}\vspace{2cm}}}
-\caption{Overview of the RoutinePolicy architecture. The Planner generates a structured routine (one phase at a time) selecting from three phase types: hypothesis, exploration, and implementation. The Executor follows the routine step-by-step, managing interactions with sub-agents (coder, research) and dataset tools. After each phase, a high-level reflective summary is returned to the Planner, which selects the next routine type and generates another phase.}
-\label{fig:routine-arch}
-\end{figure}
+  \centering
+  \includegraphics[width=0.95\linewidth]{routine_agent.pdf}
+  \caption{Overview of the RoutinePolicy architecture...}
+  \label{fig:routine-arch}
+  \end{figure}
 
 \subsection{Planner: One Phase at a Time}
 
@@ -106,23 +106,7 @@ The Planner (a Claude Code subprocess with full task context) generates \textbf{
 
 \noindent A terminal \textbf{submission} variant includes \texttt{submit\_dataset} to end the episode.
 
-\subsection{Executor: Minimal Context Per Step}
 
-The Executor (the task LLM, e.g., \texttt{gpt-oss-120b}) follows the routine step-by-step. Each step receives minimal context: the full routine with the current step marked, the current dataset state header, and recent tool results. There is no conversation history accumulation---each step is a fresh, focused prompt. This eliminates the context bloat that caused LLMPolicy to lose coherence over long episodes.
-
-\subsection{Reflective Summaries}
-
-After each phase completes, a high-level reflective summary is constructed from: (1) tool results from each step, and (2) a \texttt{think} synthesis---the agent's own reflection on what it learned and what to investigate next. The think synthesis is the critical carry-forward: it bridges the gap between raw tool outputs and strategic understanding.
-
-This summary is returned to the Planner, which---given the reflective summary plus the full phase history---generates the next routine. The Planner selects whichever of the three interaction modes it deems appropriate, creating the iterative loop:
-
-\begin{center}
-\textbf{plan} $\to$ \textbf{execute} $\to$ \textbf{reflect} $\to$ \textbf{replan}
-\end{center}
-
-\subsection{Validation and Retry}
-
-All tool names in the generated routine are validated against the real tool registry before execution begins. This catches hallucinated tools upfront rather than at runtime. On validation failure, the Planner retries with a fresh prompt (up to 3 attempts). If all attempts fail, the episode terminates with an error rather than silently degrading.
 
 \subsection{Example Run: 6 Phases, 33 Steps}
 
