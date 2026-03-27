@@ -63,30 +63,7 @@ Ep & Step & Hyp & Eval ID & COCO & GQA & OCR\_VQA & TextVQA & VG & Concat \\
 {\footnotesize $^*$COCO filtered: max assistant response $>$150 chars. $^\dagger$COCO filtered: avg assistant $>$200 chars. Row counts rounded to nearest K except where exact (1 row = placeholder).}
 \end{table}
 
-% ------ Table 3: Tested hypothesis evidence ------
-\begin{table}[H]
-\centering
-\small
-\caption{Benchmark scores for the three tested hypotheses. MMStar and MMMU (both MCQ) collapsed to near-zero in all cases; OCRBench and MathVista occasionally improved. Percentages are relative change vs baseline.}
-\label{tab:hyp-evidence}
-\begin{tabular}{llrrrrrr}
-\toprule
-ID & Ep & MMStar & OCRBench & HallusBench & MMMU & MMVet & MathVista \\
-\midrule
-\multicolumn{8}{l}{\textit{Absolute scores}} \\
-h-005 & 1 & 0.065 & 295 & 25.8 & 0.147 & 20.8 & 26.1 \\
-h-003 & 1 & 0.076 & 307 & 25.0 & 0.157 & 22.2 & 25.6 \\
-h-009 & 2 & 0.002 & 304 & 23.9 & 0.003 & 15.0 & 23.2 \\
-\midrule
-\multicolumn{8}{l}{\textit{Relative change vs baseline (\%)}} \\
-h-005 & 1 & $-79.8$ & $+0.0$ & $+7.5$ & $-55.5$ & $-28.3$ & $+7.0$ \\
-h-003 & 1 & $-76.2$ & $+4.1$ & $+4.3$ & $-52.5$ & $-23.6$ & $+4.9$ \\
-h-009 & 2 & $-99.4$ & $+3.1$ & $-0.4$ & $-99.0$ & $-48.1$ & $-4.9$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% ------ Table 4: Claims ------
+% ------ Table 3: Claims ------
 \begin{table}[H]
 \centering
 \small
