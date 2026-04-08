@@ -104,6 +104,32 @@ Each `\item` in `\keyfindings{}` should be a **sentence-assertion** (Alley):
 \e{emoji_name}            % inline emoji from emojis/ folder
 ```
 
+## Auto-Polish Rules
+
+When editing any .tex file, **always apply these cleanups automatically** without being asked:
+
+### Punctuation
+- **No em-dashes** (`---` or `—`). Replace with commas, semicolons, or split into two sentences.
+- **No en-dashes for ranges** in prose. Use "to" ("pages 3 to 7"). En-dashes are fine in tables and figures.
+
+### Figures & Boxes
+- **Figure width**: Default `\includegraphics[width=0.8\textwidth]`. Never exceed `\textwidth`.
+- **Boxes (tcolorbox, mdframed, etc.)**: Always set `width=\linewidth` or `\textwidth`. If content overflows right margin, shrink font or break into columns.
+- **Figure captions**: Must be sentence-assertions stating the finding, not topic labels. Keep under 2 lines.
+- **Table captions**: Same rule. Place above the table.
+
+### Compilation Check
+After any edit to a .tex file, run:
+```bash
+cd ~/Research/Data_Curator_Agent_overleaf && latexmk -pdf -interaction=nonstopmode main.tex 2>&1 | tail -5
+```
+If compilation fails, fix before returning to the user.
+
+### Common Fixes
+- `\textwidth` overflow: wrap in `\resizebox{\textwidth}{!}{...}` or reduce font with `\small`
+- Orphaned `\item` outside list: wrap in `\begin{itemize}...\end{itemize}`
+- Missing `\label{}` on figures/tables: add one matching the section (e.g., `\label{fig:5.1-agent-runtime}`)
+
 ## What NOT to Do
 
 - Don't add boilerplate introductions ("In this meeting we will discuss...")
